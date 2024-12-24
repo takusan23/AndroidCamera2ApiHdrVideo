@@ -13,17 +13,22 @@ import android.hardware.camera2.params.DynamicRangeProfiles
 import android.hardware.camera2.params.OutputConfiguration
 import android.hardware.camera2.params.SessionConfiguration
 import android.media.MediaRecorder
+import android.opengl.Matrix
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Range
 import android.view.Surface
 import androidx.core.content.contentValuesOf
+import io.github.takusan23.androidcamera2apihdrvideo.opengl.OpenGlRenderer
+import io.github.takusan23.androidcamera2apihdrvideo.opengl.TextureRenderer
+import io.github.takusan23.androidcamera2apihdrvideo.opengl.TextureRendererSurfaceTexture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,6 +91,11 @@ class CameraController(private val context: Context) {
         initialValue = null
     )
 
+    private var previewOpenGlRenderer: OpenGlRenderer? = null
+    private var previewSurfaceTexture: TextureRendererSurfaceTexture? = null
+    private var recordOpenGlRenderer: OpenGlRenderer? = null
+    private var recordSurfaceTexture: TextureRendererSurfaceTexture? = null
+
     /** 録画中か */
     val isRecording = _isRecording.asStateFlow()
 
@@ -96,6 +106,11 @@ class CameraController(private val context: Context) {
 
             // MediaRecorder を作る
             initMediaRecorder()
+            // OpenGL ES 周りを作る
+            createOpenGlRendererAndSurfaceTexture(mediaRecorder!!.surface).also { (newOpenGlRenderer, newSurfaceTexture) ->
+                recordOpenGlRenderer = newOpenGlRenderer
+                recordSurfaceTexture = newSurfaceTexture
+            }
 
             currentJob = launch {
                 // SurfaceView の生存に合わせる
@@ -103,11 +118,17 @@ class CameraController(private val context: Context) {
                 _surfaceFlow.collectLatest { previewSurface ->
                     previewSurface ?: return@collectLatest
 
+                    // プレビュー OpenGL ES を作る
+                    createOpenGlRendererAndSurfaceTexture(previewSurface).also { (newOpenGlRenderer, newSurfaceTexture) ->
+                        previewSurfaceTexture = newSurfaceTexture
+                        previewOpenGlRenderer = newOpenGlRenderer
+                    }
+
                     // 外カメラが開かれるのを待つ
                     val cameraDevice = backCameraDeviceFlow.filterNotNull().first()
 
-                    // カメラ出力先。プレビューと MediaRecorder
-                    val outputSurfaceList = listOfNotNull(previewSurface, mediaRecorder?.surface)
+                    // カメラ出力先。それぞれの SurfaceTexture
+                    val outputSurfaceList = listOfNotNull(previewSurfaceTexture?.surface, recordSurfaceTexture?.surface)
 
                     // CaptureRequest をつくる
                     val captureRequest = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
@@ -120,8 +141,39 @@ class CameraController(private val context: Context) {
                     // CaptureSession をつくる
                     val captureSession = cameraDevice.awaitCameraSessionConfiguration(outputSurfaceList = outputSurfaceList) ?: return@collectLatest
 
-                    // プレビュー開始
+                    // カメラ映像を流し始める
                     captureSession.setRepeatingRequest(captureRequest.build(), null, null)
+
+                    coroutineScope {
+                        // プレビューを描画する
+                        launch {
+                            try {
+                                val drawContinuesData = OpenGlRenderer.DrawContinuesData(true, 0)
+                                previewOpenGlRenderer?.drawLoop {
+                                    drawFrame(previewSurfaceTexture!!)
+                                    drawContinuesData
+                                }
+                            } finally {
+                                previewSurfaceTexture?.destroy()
+                                previewOpenGlRenderer?.destroy()
+                            }
+                        }
+                        // MediaRecorder のを描画する
+                        launch {
+                            try {
+                                val drawContinuesData = OpenGlRenderer.DrawContinuesData(true, 0)
+                                recordOpenGlRenderer?.drawLoop {
+                                    drawFrame(recordSurfaceTexture!!)
+                                    // MediaRecorder は setPresentationTime の指定が必要（そう）
+                                    drawContinuesData.currentTimeNanoSeconds = System.nanoTime()
+                                    drawContinuesData
+                                }
+                            } finally {
+                                previewSurfaceTexture?.destroy()
+                                previewOpenGlRenderer?.destroy()
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -176,6 +228,28 @@ class CameraController(private val context: Context) {
     fun destroy() {
         scope.cancel()
         // cameraExecutor.shutdown()
+    }
+
+    /** プレビューと録画の描画を共通化するための関数 */
+    private fun TextureRenderer.drawFrame(surfaceTexture: TextureRendererSurfaceTexture) {
+        drawSurfaceTexture(surfaceTexture) { mvpMatrix ->
+            // 回転する
+            // TODO 常に横画面で使う想定のため、条件分岐がありません。縦持ちでも使いたい場合は if (isLandscape) { } をやってください
+            Matrix.rotateM(mvpMatrix, 0, 90f, 0f, 0f, 1f)
+        }
+    }
+
+    /** [OpenGlRenderer]と[TextureRendererSurfaceTexture]を作る */
+    @SuppressLint("Recycle")
+    private suspend fun createOpenGlRendererAndSurfaceTexture(surface: Surface): Pair<OpenGlRenderer, TextureRendererSurfaceTexture> {
+        // OpenGL ES で描画する OpenGlRenderer を作る
+        val openGlRenderer = OpenGlRenderer(surface, VIDEO_WIDTH, VIDEO_HEIGHT, isSupportedTenBitHdr())
+        openGlRenderer.prepare()
+        // カメラ映像を OpenGL ES へ渡す SurfaceTexture を作る
+        val surfaceTexture = TextureRendererSurfaceTexture(openGlRenderer.generateTextureId())
+        // カメラ映像の解像度を設定
+        surfaceTexture.setTextureSize(VIDEO_WIDTH, VIDEO_HEIGHT)
+        return openGlRenderer to surfaceTexture
     }
 
     /** MediaRecorder と仮のファイルを作る */
