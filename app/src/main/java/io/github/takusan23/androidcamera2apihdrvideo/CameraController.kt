@@ -2,6 +2,8 @@ package io.github.takusan23.androidcamera2apihdrvideo
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Color
+import android.graphics.Paint
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
@@ -14,6 +16,7 @@ import android.hardware.camera2.params.OutputConfiguration
 import android.hardware.camera2.params.SessionConfiguration
 import android.media.MediaRecorder
 import android.opengl.Matrix
+import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Range
@@ -230,12 +233,21 @@ class CameraController(private val context: Context) {
         // cameraExecutor.shutdown()
     }
 
+    private val textPaint = Paint().apply {
+        color = Color.WHITE
+        textSize = 50f
+        isAntiAlias=true
+    }
+
     /** プレビューと録画の描画を共通化するための関数 */
     private fun TextureRenderer.drawFrame(surfaceTexture: TextureRendererSurfaceTexture) {
         drawSurfaceTexture(surfaceTexture) { mvpMatrix ->
             // 回転する
             // TODO 常に横画面で使う想定のため、条件分岐がありません。縦持ちでも使いたい場合は if (isLandscape) { } をやってください
             Matrix.rotateM(mvpMatrix, 0, 90f, 0f, 0f, 1f)
+        }
+        drawCanvas {
+            drawText("撮影:${Build.MODEL} コーデック:HEVC ダイナミックレンジ:HDR(BT.2020, HLG)", 100f, 1000f, textPaint)
         }
     }
 

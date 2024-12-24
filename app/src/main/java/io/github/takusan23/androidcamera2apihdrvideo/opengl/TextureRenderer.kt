@@ -55,7 +55,7 @@ class TextureRenderer(
      * Canvas に書く。
      * GL スレッドから呼び出すこと。
      */
-    suspend fun drawCanvas(draw: suspend Canvas.() -> Unit) {
+    fun drawCanvas(draw: Canvas.() -> Unit) {
         // 前回のを消す
         canvas.drawColor(0, PorterDuff.Mode.CLEAR)
         // 書く
