@@ -70,7 +70,6 @@ class TextureRenderer(
         GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, canvasBitmap, 0)
         checkGlError("GLUtils.texImage2D")
 
-        // 描画する
         // glError 1282 の原因とかになる
         GLES20.glUseProgram(mProgram)
         checkGlError("glUseProgram")
@@ -82,6 +81,7 @@ class TextureRenderer(
         GLES20.glUniform1i(iDrawModeHandle, FRAGMENT_SHADER_DRAW_MODE_CANVAS_BITMAP)
         checkGlError("glUniform1i sSurfaceTextureHandle sCanvasTextureHandle iDrawModeHandle")
 
+        // そのほかの値を渡す
         mTriangleVertices.position(TRIANGLE_VERTICES_DATA_POS_OFFSET)
         GLES20.glVertexAttribPointer(maPositionHandle, 3, GLES20.GL_FLOAT, false, TRIANGLE_VERTICES_DATA_STRIDE_BYTES, mTriangleVertices)
         checkGlError("glVertexAttribPointer maPosition")
@@ -93,9 +93,11 @@ class TextureRenderer(
         GLES20.glEnableVertexAttribArray(maTextureHandle)
         checkGlError("glEnableVertexAttribArray maTextureHandle")
 
+        // 行列を戻す
         Matrix.setIdentityM(mSTMatrix, 0)
         Matrix.setIdentityM(mMVPMatrix, 0)
 
+        // 描画する
         GLES20.glUniformMatrix4fv(muSTMatrixHandle, 1, false, mSTMatrix, 0)
         GLES20.glUniformMatrix4fv(muMVPMatrixHandle, 1, false, mMVPMatrix, 0)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
@@ -125,7 +127,6 @@ class TextureRenderer(
         surfaceTexture.checkAndUpdateTexImage()
         surfaceTexture.getTransformMatrix(mSTMatrix)
 
-        // 描画する
         // glError 1282 の原因とかになる
         GLES20.glUseProgram(mProgram)
         checkGlError("glUseProgram")
@@ -137,6 +138,7 @@ class TextureRenderer(
         GLES20.glUniform1i(iDrawModeHandle, FRAGMENT_SHADER_DRAW_MODE_SURFACE_TEXTURE)
         checkGlError("glUniform1i sSurfaceTextureHandle sCanvasTextureHandle iDrawModeHandle")
 
+        // そのほかの値を渡す
         mTriangleVertices.position(TRIANGLE_VERTICES_DATA_POS_OFFSET)
         GLES20.glVertexAttribPointer(maPositionHandle, 3, GLES20.GL_FLOAT, false, TRIANGLE_VERTICES_DATA_STRIDE_BYTES, mTriangleVertices)
         checkGlError("glVertexAttribPointer maPosition")
@@ -154,6 +156,7 @@ class TextureRenderer(
             onTransform(mMVPMatrix)
         }
 
+        // 描画する
         GLES20.glUniformMatrix4fv(muSTMatrixHandle, 1, false, mSTMatrix, 0)
         GLES20.glUniformMatrix4fv(muMVPMatrixHandle, 1, false, mMVPMatrix, 0)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
@@ -253,7 +256,6 @@ class TextureRenderer(
      * GL スレッドから呼び出すこと。
      */
     fun prepareDraw() {
-
         // クリア？多分必要
         GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT or GLES20.GL_COLOR_BUFFER_BIT)
 
@@ -361,6 +363,7 @@ void main() {
         private const val FRAGMENT_SHADER_DRAW_MODE_SURFACE_TEXTURE = 1
         private const val FRAGMENT_SHADER_DRAW_MODE_CANVAS_BITMAP = 2
 
+        /** 10-bit HDR の時に使うフラグメントシェーダー */
         private const val FRAGMENT_SHADER_10BIT_HDR = """#version 300 es
 #extension GL_EXT_YUV_target : require
 precision mediump float;
@@ -402,6 +405,7 @@ void main() {
 }
 """
 
+        /** SDR のときに使うフラグメントシェーダー */
         private const val FRAGMENT_SHADER = """#version 300 es
 #extension GL_OES_EGL_image_external_essl3 : require
 precision mediump float;
@@ -432,6 +436,4 @@ void main() {
 }
 """
     }
-
-
 }

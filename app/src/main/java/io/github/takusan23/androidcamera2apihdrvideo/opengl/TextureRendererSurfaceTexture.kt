@@ -6,7 +6,11 @@ import android.view.Surface
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 
-/** [SurfaceTexture]をラップしたもの、ちょっと使いにくいので */
+/**
+ * [SurfaceTexture]をラップしたもの、ちょっと使いにくいので
+ *
+ * @param initTexName [OpenGlRenderer.generateTextureId]
+ */
 class TextureRendererSurfaceTexture(private val initTexName: Int) {
 
     private val surfaceTexture = SurfaceTexture(initTexName)
@@ -59,7 +63,7 @@ class TextureRendererSurfaceTexture(private val initTexName: Int) {
     }
 
     /** 新しいフレームが来るまで待って、[SurfaceTexture.updateTexImage]を呼び出す */
-    suspend fun awaitUpdateTexImage() {
+    suspend fun awaitUpdateTexImage() { // todo 使ってない
         // フラグが来たら折る
         _isAvailableFrameFlow.first { it /* == true */ }
         _isAvailableFrameFlow.value = false
@@ -91,5 +95,4 @@ class TextureRendererSurfaceTexture(private val initTexName: Int) {
         surface.release()
         surfaceTexture.release()
     }
-
 }

@@ -94,11 +94,6 @@ class CameraController(private val context: Context) {
         initialValue = null
     )
 
-    private var previewOpenGlRenderer: OpenGlRenderer? = null
-    private var previewSurfaceTexture: TextureRendererSurfaceTexture? = null
-    private var recordOpenGlRenderer: OpenGlRenderer? = null
-    private var recordSurfaceTexture: TextureRendererSurfaceTexture? = null
-
     /** 録画中か */
     val isRecording = _isRecording.asStateFlow()
 
@@ -109,11 +104,8 @@ class CameraController(private val context: Context) {
 
             // MediaRecorder を作る
             initMediaRecorder()
-            // OpenGL ES 周りを作る
-            createOpenGlRendererAndSurfaceTexture(mediaRecorder!!.surface).also { (newOpenGlRenderer, newSurfaceTexture) ->
-                recordOpenGlRenderer = newOpenGlRenderer
-                recordSurfaceTexture = newSurfaceTexture
-            }
+            // MediaRecorder 用 OpenGlRenderer と SurfaceTexture を作る
+            val (recordOpenGlRenderer, recordSurfaceTexture) = createOpenGlRendererAndSurfaceTexture(mediaRecorder!!.surface)
 
             currentJob = launch {
                 // SurfaceView の生存に合わせる
@@ -121,23 +113,20 @@ class CameraController(private val context: Context) {
                 _surfaceFlow.collectLatest { previewSurface ->
                     previewSurface ?: return@collectLatest
 
-                    // プレビュー OpenGL ES を作る
-                    createOpenGlRendererAndSurfaceTexture(previewSurface).also { (newOpenGlRenderer, newSurfaceTexture) ->
-                        previewSurfaceTexture = newSurfaceTexture
-                        previewOpenGlRenderer = newOpenGlRenderer
-                    }
+                    // プレビュー 用 OpenGlRenderer と SurfaceTexture を作る
+                    val (previewOpenGlRenderer, previewSurfaceTexture) = createOpenGlRendererAndSurfaceTexture(previewSurface)
 
                     // 外カメラが開かれるのを待つ
                     val cameraDevice = backCameraDeviceFlow.filterNotNull().first()
 
                     // カメラ出力先。それぞれの SurfaceTexture
-                    val outputSurfaceList = listOfNotNull(previewSurfaceTexture?.surface, recordSurfaceTexture?.surface)
+                    val outputSurfaceList = listOfNotNull(previewSurfaceTexture.surface, recordSurfaceTexture.surface)
 
                     // CaptureRequest をつくる
                     val captureRequest = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
-                        // FPS とかズームとか設定するなら
                         // HDR はここじゃない
                         outputSurfaceList.forEach { surface -> addTarget(surface) }
+                        // FPS とかズームとか設定するなら
                         set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(VIDEO_FPS, VIDEO_FPS))
                     }
 
@@ -151,29 +140,33 @@ class CameraController(private val context: Context) {
                         // プレビューを描画する
                         launch {
                             try {
+                                // メインループ
                                 val drawContinuesData = OpenGlRenderer.DrawContinuesData(true, 0)
-                                previewOpenGlRenderer?.drawLoop {
-                                    drawFrame(previewSurfaceTexture!!)
+                                previewOpenGlRenderer.drawLoop {
+                                    drawFrame(previewSurfaceTexture)
                                     drawContinuesData
                                 }
                             } finally {
-                                previewSurfaceTexture?.destroy()
-                                previewOpenGlRenderer?.destroy()
+                                // コルーチンキャンセル時
+                                previewSurfaceTexture.destroy()
+                                previewOpenGlRenderer.destroy()
                             }
                         }
                         // MediaRecorder のを描画する
                         launch {
                             try {
+                                // メインループ
                                 val drawContinuesData = OpenGlRenderer.DrawContinuesData(true, 0)
-                                recordOpenGlRenderer?.drawLoop {
-                                    drawFrame(recordSurfaceTexture!!)
+                                recordOpenGlRenderer.drawLoop {
+                                    drawFrame(recordSurfaceTexture)
                                     // MediaRecorder は setPresentationTime の指定が必要（そう）
                                     drawContinuesData.currentTimeNanoSeconds = System.nanoTime()
                                     drawContinuesData
                                 }
                             } finally {
-                                previewSurfaceTexture?.destroy()
-                                previewOpenGlRenderer?.destroy()
+                                // コルーチンキャンセル時
+                                recordSurfaceTexture.destroy()
+                                recordOpenGlRenderer.destroy()
                             }
                         }
                     }
@@ -236,7 +229,7 @@ class CameraController(private val context: Context) {
     private val textPaint = Paint().apply {
         color = Color.WHITE
         textSize = 50f
-        isAntiAlias=true
+        isAntiAlias = true
     }
 
     /** プレビューと録画の描画を共通化するための関数 */
