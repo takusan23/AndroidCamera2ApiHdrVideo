@@ -145,13 +145,15 @@ class CameraController(private val context: Context) {
 
     /** 撮影終了 */
     fun stopRecord() {
-        // 録画停止
-        mediaRecorder?.stop()
-        mediaRecorder?.release()
-        _isRecording.value = false
-
-        // 動画データを動画フォルダへ移動
         scope.launch {
+            // 処理を止める
+            currentJob?.cancelAndJoin()
+            // 録画停止
+            mediaRecorder?.stop()
+            mediaRecorder?.release()
+            _isRecording.value = false
+
+            // 動画データを動画フォルダへ移動
             val contentResolver = context.contentResolver
             val contentValues = contentValuesOf(
                 MediaStore.Images.Media.DISPLAY_NAME to saveVideoFile!!.name,
