@@ -8,6 +8,7 @@
     - Camera2 API で 10-bit HDR の動画撮影をするものです
 
 # らいせんす
+`OpenGL`まわりは`camera2`サンプルアプリどおりです、、
 
 ```plaintext
 
