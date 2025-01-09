@@ -7,6 +7,9 @@
 - camera2_hdr
     - Camera2 API で 10-bit HDR の動画撮影をするものです
 
+# ブログ記事
+https://takusan.negitoro.dev/posts/android_hdr_camera_video_editor/
+
 # らいせんす
 `OpenGL`まわりは`camera2`サンプルアプリどおりです、、
 
